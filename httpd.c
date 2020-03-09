@@ -48,6 +48,7 @@ void unimplemented(int);
  * return.  Process the request appropriately.
  * Parameters: the socket connected to the client */
 /**********************************************************************/
+// 连接客户端请求 参数 client 为客户端套接字
 void *accept_request(void *client)
 {
     char buf[1024];
@@ -59,9 +60,10 @@ void *accept_request(void *client)
     struct stat st;
     int cgi = 0;      /* becomes true if server decides this is a CGI program */
     char *query_string = NULL;
-
+	// 读取套接字的一行
     numchars = get_line(*((int *)client), buf, sizeof(buf));
-    i = 0; j = 0;
+    i = 0; 
+	j = 0;
     while (!ISspace(buf[j]) && (i < sizeof(method) - 1)) {
     	method[i] = buf[j];
     	i++; 
@@ -400,10 +402,9 @@ void serve_file(int client, const char *filename)
     resource = fopen(filename, "r");
     if (resource == NULL)
         not_found(client);
-    else
-    {
+    else {
         headers(client, filename);
-   	cat(client, resource);
+        cat(client, resource);
     }
     fclose(resource);
 }
@@ -420,24 +421,28 @@ int startup(u_short *port)
 {
     int httpd = 0;
     struct sockaddr_in name;
-
-    httpd = socket(PF_INET, SOCK_STREAM, 0);
+	// 建立套接字
+    httpd = socket(PF_INET, SOCK_STREAM, 0); // 使用 IPv4 面向连接的数据传输方式
     if (httpd == -1) {
         error_die("socket");
     }
     memset(&name, 0, sizeof(name));
-    name.sin_family = AF_INET;
-    name.sin_port = htons(*port);
-    name.sin_addr.s_addr = htonl(INADDR_ANY);
+    name.sin_family = AF_INET;        // 使用 IPv4 地址
+    name.sin_port = htons(*port);     // 端口
+    name.sin_addr.s_addr = htonl(INADDR_ANY);    // ip地址
+	// 将该套接字与IP地址和端口绑定
     if (bind(httpd, (struct sockaddr *)&name, sizeof(name)) < 0) {
         error_die("bind");
     }
-    if (*port == 0) {  /* if dynamically allocating a port */
+	
+	// 动态申请一个端口
+    if (*port == 0) {
     	socklen_t namelen = sizeof(name);
-	if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
-	    error_die("getsockname");
-	*port = ntohs(name.sin_port);
+        if (getsockname(httpd, (struct sockaddr *)&name, &namelen) == -1)
+            error_die("getsockname");
+        *port = ntohs(name.sin_port);
     }
+	// 让套接字进入被动监听状态，请求队列长度 5
     if (listen(httpd, 5) < 0) {
         error_die("listen");
     }
@@ -481,25 +486,27 @@ void unimplemented(int client)
 int main(void)
 {
     int server_sock = -1;
-    u_short port = 0;
+    u_short port = 0;    // 定义端口
     int client_sock = -1;
     struct sockaddr_in client_name;
-    socklen_t client_name_len = sizeof(client_name); // 类型改为 socklen_t
+    socklen_t client_name_len = sizeof(client_name);
     pthread_t newthread;
 
+    // 建立服务端套接字，并处于监听状态
     server_sock = startup(&port);
     printf("httpd running on port %d\n", port);
 
     while (1) {
+        // 接收客户端请求
         client_sock = accept(server_sock, (struct sockaddr *)&client_name, &client_name_len);
+        if (client_sock == -1) {
+            error_die("accept");
+        }
 		
-	if (client_sock == -1) {
-	    error_die("accept");
-	}
-	/* accept_request(client_sock); */
-	if (pthread_create(&newthread , NULL, accept_request, (void *)&client_sock) != 0) {
-	    perror("pthread_create");
-	}
+        // 开辟新的线程来运行线程函数 accept_request
+        if (pthread_create(&newthread , NULL, accept_request, (void *)&client_sock) != 0) {
+	        perror("pthread_create");
+        }
     }
     close(server_sock);
     return(0);
